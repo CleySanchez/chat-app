@@ -1,80 +1,72 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, Platform, KeyboardAvoidingView } from 'react-native';
 import { GiftedChat, Bubble } from 'react-native-gifted-chat';
+import { collection, onSnapshot, query, orderBy, addDoc } from "firebase/firestore";
 
-const Chat = ({ route, navigation }) => {
-    const { name, background } = route.params;
+const Chat = ({ route, navigation, db }) => {
+  const { userId, name, background } = route.params;
+  const [messages, setMessages] = useState([]);
 
-    const [messages, setMessages] = useState([]);
+  useEffect(() => {
+    navigation.setOptions({ title: name });
 
-    useEffect(() => {
-        // Set the title of the screen to the user's name
-        navigation.setOptions({ title: name });
+    const q = query(collection(db, 'messages'), orderBy('createdAt', 'desc'));
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      let newMessages = [];
+      querySnapshot.forEach(doc => {
+        newMessages.push({
+          _id: doc.id,
+          ...doc.data(),
+          createdAt: new Date(doc.data().createdAt.toMillis())
+        });
+      });
+      setMessages(newMessages);
+    });
 
-        // Load initial messages
-        setMessages([
-            {
-                _id: 1,
-                text: "Hello Developer",
-                createdAt: new Date(),
-                user: {
-                    _id: 2,
-                    name: "React Native",
-                    avatar: "https://placeimg.com/140/140/any",
-                },
-            },
-            {
-                _id: 2,
-                text: "This is a system message",
-                createdAt: new Date(),
-                system: true,
-            },
-        ]);
-    }, []);
+    return () => unsubscribe();
+  }, []);
 
-    // Function to handle sending new messages
-    const onSend = (newMessages = []) => {
-        setMessages(previousMessages => GiftedChat.append(previousMessages, newMessages));
-    };
+  const onSend = (newMessages = []) => {
+    addDoc(collection(db, "messages"), newMessages[0]);
+  };
 
-    // Function to customize the message bubbles
-    const renderBubble = (props) => {
-        return (
-            <Bubble
-                {...props}
-                wrapperStyle={{
-                    right: {
-                        backgroundColor: "#000",
-                    },
-                    left: {
-                        backgroundColor: "#FFF",
-                    },
-                }}
-            />
-        );
-    };
-
+  const renderBubble = (props) => {
     return (
-        <View style={[styles.container, { backgroundColor: background }]}>
-            <GiftedChat
-                messages={messages}
-                onSend={messages => onSend(messages)}
-                user={{
-                    _id: 1,
-                }}
-                renderBubble={renderBubble}
-            />
-            {/* KeyboardAvoidingView to ensure input is visible when keyboard is open */}
-            {Platform.OS === 'android' && <KeyboardAvoidingView behavior="height" />}
-            {Platform.OS === 'ios' && <KeyboardAvoidingView behavior="padding" />}
-        </View>
+      <Bubble
+        {...props}
+        wrapperStyle={{
+          right: {
+            backgroundColor: background || "#000",
+          },
+          left: {
+            backgroundColor: "#FFF",
+          },
+        }}
+      />
     );
+  };
+
+  return (
+    <View style={[styles.container, { backgroundColor: background }]}>
+      <GiftedChat
+        messages={messages}
+        onSend={messages => onSend(messages)}
+        user={{
+          _id: userId,
+          name: name,
+        }}
+        renderBubble={renderBubble}
+      />
+      {Platform.OS === 'android' && <KeyboardAvoidingView behavior="height" />}
+      {Platform.OS === 'ios' && <KeyboardAvoidingView behavior="padding" />}
+    </View>
+  );
 };
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-    },
+  container: {
+    flex: 1,
+  },
 });
 
 export default Chat;
